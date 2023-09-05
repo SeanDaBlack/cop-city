@@ -1,5 +1,8 @@
+import argparse
 import time
 import faker, random
+import logging
+from selenium.webdriver.remote.remote_connection import LOGGER
 from faker_e164.providers import E164Provider
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -13,13 +16,21 @@ from selenium.common.exceptions import MoveTargetOutOfBoundsException
 from state_abbrev import us_state_to_abbrev
 from email_data import *
 from signature import *
-from handwriting_synthesis import Hand
+# from handwriting_synthesis import Hand
 from svg.path import parse_path, Move, Path
 from xml.dom import minidom
 
 url = "https://fs7.formsite.com/DyGKwz/eguau648q8/index"
 fake = faker.Faker()
 fake.add_provider(E164Provider)
+
+CLOUD_DESCRIPTION = 'Puts script in a \'cloud\' mode where the Chrome GUI is invisible'
+CLOUD_DISABLED = False
+CLOUD_ENABLED = True
+EPILOG = ''
+SCRIPT_DESCRIPTION = ''
+
+
 
 all_fields = {
     "RSVP": ['RESULT_CheckBox-0_0', 'RESULT_CheckBox-0_1'],
@@ -63,6 +74,13 @@ all_fields = {
     "Obstruction": 'RESULT_RadioButton-38',
     "Drug":'RESULT_RadioButton-39',
 }
+
+# Option parsing
+parser = argparse.ArgumentParser(SCRIPT_DESCRIPTION, epilog=EPILOG)
+parser.add_argument('--cloud', action='store_true', default=CLOUD_DISABLED,
+                    required=False, help=CLOUD_DESCRIPTION, dest='cloud')
+
+args = parser.parse_args()
 
 def random_email(name=None):
     if name is None:
@@ -112,20 +130,30 @@ def createFakeIdentity():
     return fake_identity
 
 def start_driver(url):
-    options = webdriver.ChromeOptions()
-    service = Service()
-    options.add_argument(
-        "--disable-blink-features=AutomationControlled")
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-setuid-sandbox')
-    options.add_argument(  # Enable the WebGL Draft extension.
-        '--enable-webgl-draft-extensions')
-    options.add_argument('--disable-infobars')  # Disable popup
-    options.add_argument('--disable-popup-blocking')  # and info bars.
-    # chrome_options.add_extension("./extensions/Tampermonkey.crx")
-    driver = webdriver.Chrome(service=service, options=options)
-    
+    if (args.cloud == CLOUD_ENABLED):
+        LOGGER.setLevel(logging.WARNING)
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument("window-size=1200x600")
+        driver = webdriver.Chrome(
+            'chromedriver', options=options)
+
+    else:
+        options = webdriver.ChromeOptions()
+        options.add_argument(
+            "--disable-blink-features=AutomationControlled")
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument(  # Enable the WebGL Draft extension.
+            '--enable-webgl-draft-extensions')
+        options.add_argument('--disable-infobars')  # Disable popup
+        options.add_argument('--disable-popup-blocking')  # and info bars.
+        # chrome_options.add_extension("./extensions/Tampermonkey.crx")
+        driver = webdriver.Chrome(
+            ChromeDriverManager().install(), options=options)
     return driver
 
 def test_success(driver):
