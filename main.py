@@ -13,7 +13,9 @@ from selenium.common.exceptions import MoveTargetOutOfBoundsException
 from state_abbrev import us_state_to_abbrev
 from email_data import *
 from signature import *
-
+from handwriting_synthesis import Hand
+from svg.path import parse_path, Move, Path
+from xml.dom import minidom
 
 url = "https://fs7.formsite.com/DyGKwz/eguau648q8/index"
 fake = faker.Faker()
@@ -137,9 +139,10 @@ def test_success(driver):
 
 
 def draw(action, x, y):
+    print(x,y)
     action.click_and_hold().move_by_offset(x,y).release().perform()
 
-def draw_sig(driver):
+def draw_sig(driver, coords):
     total = 30
     action = ActionChains(driver)
     sign = driver.find_element(By.CLASS_NAME, "jSignature")
@@ -149,11 +152,24 @@ def draw_sig(driver):
     element_width = sign.size.get('width')
     starting_width=element_width+((-sign.size.get('width')/2)+total)
 
+    print(starting_height, starting_width)
+
+    # for x,y in coords[::10]:
+    #     if x <= 1 or y <= 1:
+    #         pass
+    #     else:
+    #         x*=.01
+    #         y*=.01
+    #         print(x,y)
+    #         # x-=starting_width
+    #         # y-=starting_height
+    #         draw(action, x, y)
+
     x, y = generate_signature(10, (-10, 30), (-10, 10))
 
-    #limit to 30 points
-    # step = random.randint(1,2)
-    # points = random.randint(50, 75)
+    # limit to 30 points
+    step = random.randint(1,2)
+    points = random.randint(50, 75)
     step=2
     points = 100
 
@@ -292,14 +308,86 @@ def fill_out_form(driver, identity):
     #Drug
     Select(driver.find_element(By.ID, all_fields.get('Drug'))).select_by_visible_text("No")
 
+def writing_setup(lines):
+    hand = Hand()
+
+    biases = [.75 for i in lines]
+    styles = [9 for i in lines]
+    stroke_colors = ['black']
+    stroke_widths = [1, 2, 1, 2]
+
+
+    hand.write(
+        filename='img/signature.svg',
+        lines=lines,
+        biases=biases,
+        styles=styles,
+        stroke_colors=stroke_colors,
+        stroke_widths=stroke_widths
+    )
+
+    
+
+
+def parse_svg(filename):
+    svg_dom = minidom.parseString(filename)
+
+    path_strings = [path.getAttribute('d') for path in svg_dom.getElementsByTagName('path')]
+
+    # Extract (x, y) coordinates from the path
+    coordinates_list = []
+
+    for path_string in path_strings:
+        path_data = parse_path(path_string)
+
+    return path_string
+    # for segment in path_data:
+    #     if segment.start is not None:
+    #         coordinates_list.append((segment.start.real, segment.start.imag))
+        
+    #     if segment.end is not None:
+    #         coordinates_list.append((segment.end.real, segment.end.imag))
+
+
+    # start = Move(to=(190+1j))
+    # print(path_data[0])
+
+    # print(coordinates_list)
+    # return coordinates_list
+
+def to_base30(value):
+    base30_characters = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ_"
+    base10_value = int(value)
+    base30_value = ""
+
+    while base10_value > 0:
+        remainder = base10_value % 30
+        base30_value = base30_characters[remainder] + base30_value
+        base10_value //= 30
+    
+    return base30_value
+
+    base30_encoded = "".join(to_base30(segment) for segment in path_data)
+    print(base30_encoded)
+
 def main():
     identity= createFakeIdentity()
     driver = start_driver(url)
     driver.get(url)
     test_success(driver)
     fill_out_form(driver, identity)
-    draw_sig(driver)
-    time.sleep(10)
+    writing_setup([identity.get('first_name') + " " + identity.get('middle_name')[0] + " " + identity.get('last_name')])
+    coords = parse_svg(open('img/signature.svg','r').read())
+    draw_sig(driver, coords)
+
+    # Iterate through x and y coordinates, convert them to base30, and concatenate
+    # base30_encoded = ""
+    # segments = parse_svg(open('img/signature.svg','r').read())
+    # base30_encoded = "".join(to_base30(segment) for segment in segments)
+    # print(base30_encoded)
+
+
+    time.sleep(10000)
 
 
 main()
